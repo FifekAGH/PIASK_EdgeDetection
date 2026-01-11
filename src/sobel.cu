@@ -1,20 +1,23 @@
 #include "sobel.h"
 #include <math.h>
 #include <cuda_runtime.h>
+#include "stb_image/stb_image.h"
+#include "stb_image/stb_image_write.h"
 
 #define SOBEL_MASK_DIM 3
 #define SOBEL_MASK_SIZE (SOBEL_MASK_DIM * SOBEL_MASK_DIM)
 #define BLOCK_SIZE_X 16
 #define BLOCK_SIZE_Y 16
+#define CHANNELS 4
 
 
-const sobelX[9] = {
+const int sobelX[9] = {
     -1, 0, 1,
     -2, 0, 2,
     -1, 0, 1
 };
 
-const sobelY[9] = {
+const int sobelY[9] = {
     1,  2,  1,
     0,  0,  0,
    -1, -2, -1
@@ -30,6 +33,34 @@ void checkCudaErrorAux(const char *file, unsigned line, const char *statement, c
 
 #define CUDA_CHECK_RETURN(value) checkCudaErrorAux(__FILE__,__LINE__, #value, value)
 
+__device__ bool isOutOfBounds(int x, int y, int image_width, int image_height) {
+    if (x < 0 || y < 0 || x >= image_width || y >= image_height) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+__host__ __device__ void getPixel(const stbi_uc* image, int width, int x, int y, Pixel* pixel) {
+    const stbi_uc* p = image + (STBI_rgb_alpha * (y * width + x));
+    pixel->r = p[0];
+    pixel->g = p[1];
+    pixel->b = p[2];
+    pixel->a = p[3];
+}
+
+__host__ __device__ void setPixel(stbi_uc* image, int width, int x, int y, Pixel* pixel) {
+    stbi_uc* p = image + (STBI_rgb_alpha * (y * width + x));
+    p[0] = pixel->r;
+    p[1] = pixel->g;
+    p[2] = pixel->b;
+    p[3] = pixel->a;
+}
+
+__host__ __device__ void printPixel(Pixel* pixel) {
+    printf("r = %u, g = %u, b = %u, a = %u\n", pixel->r, pixel->g, pixel->b, pixel->a);
+}
+
 /*
  * Kernel, that performs convolution
  */
@@ -41,7 +72,7 @@ __global__ void convolve(const stbi_uc* input_img, stbi_uc* output_img, const in
 
     int mask_size = mask_dimension / 2; //for mask 3x3 mask_size = 1
 
-    Pixel current_pixel; output_pixel;
+    Pixel current_pixel, output_pixel;
     int red = 0; int blue = 0; int green = 0; // int alpha = 0;
 
     int current_x; int current_y;
@@ -66,8 +97,10 @@ __global__ void convolve(const stbi_uc* input_img, stbi_uc* output_img, const in
     output_pixel.r = min(max(red, 0), 255);
     output_pixel.g = min(max(green, 0), 255);
     output_pixel.b = min(max(blue, 0), 255);
+    output_pixel.a = 255;
     setPixel(output_img, width, x, y, &output_pixel);
 }
+
 
 __global__ void combineGradients(const stbi_uc* gx_img, const stbi_uc* gy_img, stbi_uc* output_img, int width,
                                 int height) { 
@@ -82,8 +115,11 @@ __global__ void combineGradients(const stbi_uc* gx_img, const stbi_uc* gy_img, s
     getPixel(gy_img, width, x, y, &gy_pixel);
 
     int mag = (int)sqrtf((float)(gx_pixel.r * gx_pixel.r + gy_pixel.r * gy_pixel.r));
-    mag = min(max(mag, 0), 255); 
-    out_pixel.r = out_pixel.g = out_pixel.b = mag; 
+    mag = min(max(mag, 0), 255);
+
+    //out_pixel.r = out_pixel.g = out_pixel.b = mag; 
+    out_pixel.r = out_pixel.g = out_pixel.b = 255 - mag; 
+    out_pixel.a = 255;
     setPixel(output_img, width, x, y, &out_pixel);
 }
 

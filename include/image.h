@@ -1,6 +1,9 @@
 #ifndef IMAGE_H
 #define IMAGE_H
 
+#include "stb_image/stb_image.h"
+#include "stb_image/stb_image_write.h"
+
 typedef struct Pixel {
     stbi_uc r;
     stbi_uc g;
@@ -14,10 +17,9 @@ void writeImage(const char* path_to_image, stbi_uc* image, int width, int height
 
 void imageFree(stbi_uc* image);
 
-__host__ __device__ void getPixel(stbi_uc* image, int width, int x, int y, Pixel* pixel);
+// __host__ __device__ void getPixel(const stbi_uc* image, int width, int x, int y, Pixel* pixel);
 
-__host__ __device__ void setPixel(stbi_uc* image, int width, int x, int y, Pixel* pixel);
+// __host__ __device__ void setPixel(stbi_uc* image, int width, int x, int y, Pixel* pixel);
 
-__device__ bool isOutOfBounds(int x, int y, int image_width, int image_height);
 
 #endif
